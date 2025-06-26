@@ -1,23 +1,42 @@
 import streamlit as st
-from deepfake_detector import is_deepfake
+import numpy as np
 from PIL import Image
-import io
+import tensorflow as tf
+import cv2
 
-uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+# Title
+st.title("🕵️ Deepfake Detector")
+st.write("Upload an image to check if it's real or fake.")
 
-if uploaded_file:
-    # Read file as bytes
-    image_bytes = uploaded_file.read()
+# Load model with caching
+@st.cache_resource
+def load_model():
+    model = tf.keras.models.load_model("deepfake_model.h5")
+    return model
 
-    # Display image using PIL
-    image = Image.open(io.BytesIO(image_bytes))
+model = load_model()
+threshold = 0.53  # Hardcoded threshold
+
+# Image uploader
+uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    # Save bytes to disk for OpenCV to read
-    with open("temp.jpg", "wb") as f:
-        f.write(image_bytes)
+    # Preprocess
+    img = image.resize((224, 224))
+    img_array = np.array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
 
-    # Run prediction
-    result, confidence = is_deepfake("temp.jpg")
-    st.write(f"### Result: {result}")
-    st.write(f"### Confidence: {confidence:.2f}")
+    # Prediction
+    prediction = model.predict(img_array)[0][0]
+    confidence = float(prediction)
+
+    # Show result
+    st.markdown(f"**Detection Confidence:** {confidence * 100:.2f}%")
+
+    if confidence >= threshold:
+        st.markdown("### 🔥 **Fake Image Detected**")
+    else:
+        st.markdown("### ✅ **Real Image Detected**")
