@@ -5,42 +5,45 @@ import tensorflow as tf
 import cv2
 
 # Title
-st.title("🕵️ Deepfake Detector")
-st.write("Upload an image to check if it's real or fake.")
+st.set_page_config(page_title="Deepfake Detector", page_icon="🕵️")
+st.title("🕵️ Foolproof Deepfake Detector")
+st.write("Upload an image to check if it's **real** or **fake** using our AI model.")
 
-# Load model with caching
+# Load model
 @st.cache_resource
 def load_model():
-    model = tf.keras.models.load_model("deepfake_model.h5")
-    return model
+    return tf.keras.models.load_model("deepfake_model.h5")
 
 model = load_model()
-threshold = 0.50  # Hardcoded threshold
 
-# Image uploader
+# Optional: Let users tweak threshold
+threshold = st.slider("Detection Threshold (Default = 50%)", 0.0, 1.0, 0.5)
+
+# File uploader
 uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert("RGB")
-    
-    if image.size[0] > 2000 or image.size[1] > 2000:
-        image = image.resize((1024, 1024))
-         
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+if uploaded_file:
+    try:
+        image = Image.open(uploaded_file).convert("RGB")
+        original_size = image.size
+        st.image(image, caption=f"Uploaded Image ({original_size[0]}x{original_size[1]})", use_column_width=True)
 
-    # Preprocess
-    img = image.resize((224, 224))
-    img_array = np.array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+        # Resize for model (without destroying aspect ratio)
+        img_resized = image.resize((224, 224))
+        img_array = np.array(img_resized) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
 
-    # Prediction
-    prediction = model.predict(img_array)[0][0]
-    confidence = float(prediction)
+        # Prediction
+        prediction = model.predict(img_array)[0][0]
+        confidence = float(prediction)
 
-    # Show result
-    st.markdown(f"**Detection Confidence:** {confidence * 100:.2f}%")
+        # Result display
+        st.markdown(f"### 🔍 Detection Confidence: **{confidence * 100:.2f}%**")
 
-    if confidence >= threshold:
-        st.markdown("### 🔥 **Fake Image Detected**")
-    else:
-        st.markdown("### ✅ **Real Image Detected**")
+        if confidence >= threshold:
+            st.markdown("### 🔥 **Result: Fake Image Detected**")
+        else:
+            st.markdown("### ✅ **Result: Real Image Detected**")
+
+    except Exception as e:
+        st.error(f"Something went wrong: {e}")
