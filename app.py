@@ -15,7 +15,7 @@ def load_model():
     return model
 
 model = load_model()
-threshold = 0.52  # Hardcoded threshold
+threshold = 0.50  # Hardcoded threshold
 
 # Image uploader
 uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
