@@ -1,58 +1,62 @@
 import streamlit as st
+import os
+import gdown
+import tempfile
+import cv2
 import numpy as np
-from PIL import Image
 import tensorflow as tf
+from tensorflow.keras.applications.efficientnet import preprocess_input
 
-# Configure page
-st.set_page_config(page_title="Deepfake Detector", page_icon="🕵️")
-st.title("🕵️ Foolproof Deepfake Detector")
-st.write("Upload an image to check if it's **real** or **fake** using our AI model.")
+MODEL_PATH = "deepfake_model.h5"
+FILE_ID = "1iMF-A015RHMZQNE2EYBG9U1sRMINB1YU"  # ← Replace with your real Google Drive file ID
 
-# Load model with caching
 @st.cache_resource
-def load_model():
-    return tf.keras.models.load_model("deepfake_model.h5")
+def download_and_load_model():
+    if not os.path.exists(MODEL_PATH):
+        st.info("Downloading model from Google Drive...")
+        url = f"https://drive.google.com/uc?id={FILE_ID}"
+        gdown.download(url, MODEL_PATH, quiet=False)
+    return tf.keras.models.load_model(MODEL_PATH)
 
-model = load_model()
-threshold = 0.52  # Fixed threshold
+model = download_and_load_model()
 
-# File uploader
-uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
+def preprocess_image(image_path):
+    image = cv2.imread(image_path)
+    if image is None:
+        raise ValueError("Failed to load image")
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, (224, 224))
+    image = image.astype("float32")
+    image = preprocess_input(image)
+    image = np.expand_dims(image, axis=0)
+    return image
 
-if uploaded_file:
-    try:
-        # Load and show original image
-        image = Image.open(uploaded_file).convert("RGB")
-        original_size = image.size
-        st.image(image, caption=f"Uploaded Image ({original_size[0]}x{original_size[1]})", use_container_width=True)
+def is_deepfake(image_path):
+    image = preprocess_image(image_path)
+    prediction = model.predict(image)[0][0]
+    if prediction > 0.5:
+        return "Fake", prediction
+    else:
+        return "Real", 1 - prediction
 
-        # Preprocess for model input
-        img_resized = image.resize((224, 224))
-        img_array = np.array(img_resized) / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
+# UI
+st.title("🕵️ Foolproof Deepfake Detector")
+st.write("Upload an image to check if it's real or fake using our AI model.")
 
-        # Model prediction
-        prediction = model.predict(img_array)[0][0]
-        confidence = float(prediction)
+uploaded_file = st.file_uploader("Choose an image", type=["jpg", "jpeg", "png"])
 
-        # Show result
-        st.markdown(f"### 🔍 Detection Confidence: **{confidence * 100:.2f}%**")
-        if confidence >= threshold:
-            st.markdown("### 🔥 **Result: Fake Image Detected**")
-        else:
-            st.markdown("### ✅ **Result: Real Image Detected**")
+if uploaded_file is not None:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+        temp_file.write(uploaded_file.read())
+        temp_path = temp_file.name
 
-    except Exception as e:
-        st.error(f"⚠️ An error occurred while processing the image: {e}")
+    st.image(temp_path, caption="Uploaded Image", use_column_width=True)
 
-# Tips for best results
-st.markdown("""
-<details>
-<summary>💡 Tips for Best Results</summary>
+    with st.spinner("Analyzing..."):
+        try:
+            result, confidence = is_deepfake(temp_path)
+            st.success(f"Result: **{result}**\n\nConfidence: **{confidence:.2f}**")
+        except Exception as e:
+            st.error(f"Error during prediction: {e}")
 
-- Upload clear, front-facing facial images.
-- Avoid low-resolution, blurry, or overly compressed images.
-- This is a public-use tool and not suitable for legal or forensic verification.
-
-</details>
-""", unsafe_allow_html=True)
+    os.remove(temp_path)
