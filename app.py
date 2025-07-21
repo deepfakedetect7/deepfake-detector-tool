@@ -14,7 +14,7 @@ def load_model():
     return tf.keras.models.load_model("deepfake_model.h5")
 
 model = load_model()
-threshold = 0.51  # Fixed threshold
+threshold = 0.52  # Fixed threshold
 
 # File uploader
 uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
